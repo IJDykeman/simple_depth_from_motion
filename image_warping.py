@@ -22,8 +22,19 @@ def warp(pixel_coords, depth_image, se3_u, se3_w):
     # it over the spatial dimensions of the image batch
     transform = tf.reshape(transform, [-1,1,1,4,4])
     camera_transform_map = transform + blank_transform_map
+        # some versions of tf.matmul on gpu can not handle large batches 
+    # It seems to be about 60000 (150*400). So I split up into batches
+    ctms = tf.split(camera_transform_map,num_or_size_splits=10,axis=1)
+    hpcs = tf.split(homogenous_pixel_coords,num_or_size_splits=10,axis=1)  
     
-    warped_pixel_location = tf.matmul(camera_transform_map, homogenous_pixel_coords)[...,0]
+    catshape = homogenous_pixel_coords.shape.as_list()
+    catshape[1] = 0
+    warped_pixel_location = tf.ones(catshape) #(0, 400, 400, 4, 1)
+    for ctm,hpc in zip(ctms,hpcs):
+        wpx = tf.matmul(ctm,hpc)
+        warped_pixel_location = tf.concat([warped_pixel_location,wpx],1)
+    warped_pixel_location = warped_pixel_location[...,0]
+    #warped_pixel_location = tf.matmul(camera_transform_map, homogenous_pixel_coords)[...,0]
     return tf.stack([warped_pixel_location[...,0], 
                      warped_pixel_location[...,1],
                      tf.ones_like(depth_image)], axis=-1) \
