@@ -23,23 +23,19 @@ def warp(pixel_coords, depth_image, se3_u, se3_w):
     transform = tf.reshape(transform, [-1,1,1,4,4])
     camera_transform_map = transform + blank_transform_map
    
-
-    camera_transform_map_parts = tf.split(camera_transform_map,num_or_size_splits=10,axis=1)
-    homogenous_pixel_coords_parts = tf.split(homogenous_pixel_coords,num_or_size_splits=10,axis=1)  
+    n_splits = 4 #keep points per split 40000 or lower
+    camera_transform_map_parts = tf.split(camera_transform_map,num_or_size_splits=n_splits,axis=1)
+    homogenous_pixel_coords_parts = tf.split(homogenous_pixel_coords,num_or_size_splits=n_splits,axis=1) 
     
-    warped_pixel_location_shape = homogenous_pixel_coords.shape.as_list()
-    warped_pixel_location_shape[1] = 0
-    warped_pixel_location = tf.ones(warped_pixel_location_shape) #(0, 400, 400, 4, 1)
+    parts_list = []
     for ctm,hpc in zip(camera_transform_map_parts,homogenous_pixel_coords_parts):
-        warped_pixel_location_part = tf.matmul(ctm,hpc)
-        warped_pixel_location = tf.concat([warped_pixel_location,warped_pixel_location_part],1)
-    warped_pixel_location = warped_pixel_location[...,0]
+        parts_list.append(tf.matmul(ctm,hpc)[...,0])
+    warped_pixel_location = tf.concat(parts_list,1) 
     
     return tf.stack([warped_pixel_location[...,0], 
                      warped_pixel_location[...,1],
                      tf.ones_like(depth_image)], axis=-1) \
                         / tf.expand_dims(warped_pixel_location[...,2], axis=-1)
-
 
 def warp_image(image_batch, depth_image, se3_u, se3_w):
     
