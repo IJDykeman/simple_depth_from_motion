@@ -22,8 +22,16 @@ def warp(pixel_coords, depth_image, se3_u, se3_w):
     # it over the spatial dimensions of the image batch
     transform = tf.reshape(transform, [-1,1,1,4,4])
     camera_transform_map = transform + blank_transform_map
+   
+    n_splits = 4 #keep points per split 40000 or lower
+    camera_transform_map_parts = tf.split(camera_transform_map,num_or_size_splits=n_splits,axis=1)
+    homogenous_pixel_coords_parts = tf.split(homogenous_pixel_coords,num_or_size_splits=n_splits,axis=1) 
     
-    warped_pixel_location = tf.matmul(camera_transform_map, homogenous_pixel_coords)[...,0]
+    parts_list = []
+    for ctm,hpc in zip(camera_transform_map_parts,homogenous_pixel_coords_parts):
+        parts_list.append(tf.matmul(ctm,hpc)[...,0])
+    warped_pixel_location = tf.concat(parts_list,1) 
+    
     return tf.stack([warped_pixel_location[...,0], 
                      warped_pixel_location[...,1],
                      tf.ones_like(depth_image)], axis=-1) \
